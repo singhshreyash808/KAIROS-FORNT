@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthcore 2D | KAIROS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { 
+            background-color: #000; 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Inter', sans-serif; 
+            color: white;
+        }
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            background: #000;
+        }
+        /* Dashboard styling for KAIROS */
+        .glass-blur { 
+            background: rgba(10, 10, 10, 0.85); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+        }
+        
+        /* Custom Leaflet Dark Map overrides */
+        .leaflet-container {
+            background-color: #0a0a0a;
+        }
+        .leaflet-tile {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        }
+        
+        /* Floating panels */
+        .overlay-panel {
+            position: absolute;
+            z-index: 50;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation -->
+    <nav class="absolute top-0 left-0 w-full h-16 glass-blur z-50 flex items-center justify-between px-10 border-b border-white/10">
+        <div class="flex items-center gap-8">
+            <div class="text-cyan-500 font-bold tracking-tighter text-xl italic cursor-pointer" onclick="window.location.href='/'">KAIROS</div>
+            <div class="hidden md:flex gap-6 text-[10px] font-bold tracking-[0.2em] text-gray-400">
+                <span class="text-white uppercase tracking-widest">Earthcore 2D View</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-6">
+            <button class="text-[10px] font-bold tracking-widest text-cyan-500 hover:text-cyan-400 border border-cyan-500/30 px-4 py-1.5 rounded uppercase transition" onclick="window.location.href='/dashboard'">Exit to Dashboard</button>
+        </div>
+    </nav>
+
+    <!-- Side Panel -->
+    <div class="overlay-panel top-24 left-6 w-80 glass-blur rounded-xl p-6 border border-white/10 shadow-2xl flex flex-col gap-4 transition-all" id="info-panel">
+        <div>
+            <h2 class="text-cyan-500 font-mono tracking-[0.3em] text-[10px] uppercase mb-1">Visualization Layer</h2>
+            <h1 class="text-3xl font-light tracking-tighter uppercase">Fused Points</h1>
+            <p class="text-gray-400 text-xs mt-2 italic">Representing features extracted from multiple satellite datasets.</p>
+        </div>
+        
+        <div class="h-px w-full bg-white/10 my-2"></div>
+        
+        <div class="flex flex-col gap-2">
+            <div class="flex justify-between items-center text-xs">
+                <span class="text-gray-500 tracking-widest uppercase">Data Status:</span>
+                <span id="data-status" class="text-cyan-400 font-bold">Awaiting Auth...</span>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+                <span class="text-gray-500 tracking-widest uppercase">Total Points:</span>
+                <span id="data-count" class="font-bold text-white">--</span>
+            </div>
+        </div>
+        
+        <button id="btn-load" class="mt-4 w-full bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold py-2 rounded uppercase tracking-widest transition">
+            Load Fused Data
+        </button>
+    </div>
+    
+    <!-- View Switcher -->
+    <div class="overlay-panel bottom-10 left-1/2 -translate-x-1/2 glass-blur rounded-full px-6 py-3 border border-white/10 shadow-2xl flex items-center gap-4">
+        <span class="text-[9px] text-gray-500 font-bold tracking-[0.3em] uppercase">Toggle View</span>
+        <div class="flex bg-black/40 rounded p-1 border border-white/5">
+            <button class="px-5 py-1.5 rounded bg-cyan-500/20 text-cyan-400 text-[10px] font-bold tracking-widest uppercase shadow">2D Planar</button>
+            <button class="px-5 py-1.5 rounded text-gray-400 hover:text-white hover:bg-white/5 text-[10px] font-bold tracking-widest uppercase transition" onclick="window.location.href='/earth3d.html'">3D Globe</button>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Initialize Leaflet Map
+            const map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([20.0, 78.0], 5); // Default to India/South Asia
+            
+            // Add custom styled Dark Matter base map
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                subdomains: 'abcd'
+            }).addTo(map);
+            
+            // Add zoom controls to the bottom right
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            let layerGroup = L.featureGroup().addTo(map);
+            
+            const btnLoad = document.getElementById("btn-load");
+            const statusEl = document.getElementById("data-status");
+            const countEl = document.getElementById("data-count");
+            
+            // Re-use logic from main.js to fetch the token and geometry
+            function getToken() {
+                return localStorage.getItem("token");
+            }
+
+            async function loadFusedData() {
+                const token = getToken();
+                if (!token) {
+                    statusEl.textContent = "Unauthorized";
+                    statusEl.className = "text-red-500 font-bold";
+                    alert("Please log in via the dashboard first.");
+                    return;
+                }
+                
+                statusEl.textContent = "Fetching...";
+                statusEl.className = "text-yellow-400 font-bold";
+                btnLoad.disabled = true;
+                
+                try {
+                    const res = await fetch("/api/fused/geojson", {
+                        method: "GET",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        }
+                    });
+                    
+                    if (!res.ok) throw new Error("Failed to fetch data");
+                    
+                    const geojson = await res.json();
+                    
+                    // Clear existing layer
+                    layerGroup.clearLayers();
+                    
+                    if (!geojson.features || geojson.features.length === 0) {
+                        statusEl.textContent = "No Data";
+                        statusEl.className = "text-gray-400 font-bold";
+                        countEl.textContent = "0 (Run Fusion)";
+                        btnLoad.disabled = false;
+                        return;
+                    }
+                    
+                    // Add geojson with custom styling
+                    L.geoJSON(geojson, {
+                        pointToLayer: (feature, latlng) => {
+                            const val = feature.properties.value || 50;
+                            // Calculate color based on value (heat map style)
+                            const intensity = val / 255;
+                            const color = intensity > 0.7 ? '#00d2ff' : intensity > 0.4 ? '#3a7bd5' : '#8a2be2';
+                            
+                            return L.circleMarker(latlng, {
+                                radius: 5 + (intensity * 5),
+                                color: '#ffffff',
+                                weight: 1,
+                                fillColor: color,
+                                fillOpacity: 0.8
+                            }).bindPopup(`
+                                <div class="bg-black/90 text-white p-2 rounded border border-white/20">
+                                    <div class="text-[10px] text-cyan-500 uppercase tracking-wider mb-1">Fused Value</div>
+                                    <div class="text-xl font-bold">${val.toFixed(2)}</div>
+                                </div>
+                            `);
+                        }
+                    }).addTo(layerGroup);
+                    
+                    // Fit bounds to the data
+                    map.fitBounds(layerGroup.getBounds(), { padding: [50, 50] });
+                    
+                    statusEl.textContent = "Active";
+                    statusEl.className = "text-cyan-400 font-bold";
+                    countEl.textContent = geojson.features.length;
+                    
+                } catch (err) {
+                    console.error("Error loading layer", err);
+                    statusEl.textContent = "Error";
+                    statusEl.className = "text-red-500 font-bold";
+                } finally {
+                    btnLoad.disabled = false;
+                }
+            }
+
+            btnLoad.addEventListener("click", loadFusedData);
+            
+            // Auto-load if token exists
+            if (getToken()) {
+                loadFusedData();
+            } else {
+                statusEl.textContent = "Requires Auth";
+                statusEl.className = "text-red-500 font-bold";
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Terra Intelligence | Drill-Down Command</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;900&family=JetBrains+Mono&display=swap');
+        body { background-color: #000; margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #cesiumContainer { position: absolute; top: 0; right: 0; width: 75%; height: 100%; z-index: 1; }
+        .glass-panel-left { background: linear-gradient(to right, #000 65%, transparent); z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        .cesium-viewer-bottom { display: none !important; }
+        .glass-blur { background: rgba(10, 10, 10, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        /* Search Animation */
+        .searching-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body class="text-white">
+
+    <nav class="absolute top-0 left-0 w-full h-16 glass-blur z-50 flex items-center justify-between px-10 border-b border-white/10">
+        <div class="flex items-center gap-8">
+            <div class="text-cyan-500 font-black tracking-tighter text-xl italic">SATFUSSION</div>
+            <div class="relative interactive">
+                <input type="text" id="searchInput" 
+                    placeholder="ENTER PRIMARY TARGET (e.g. INDIA)..." 
+                    class="bg-black/50 border border-white/20 rounded-full px-5 py-2 text-[10px] w-80 font-mono tracking-widest focus:outline-none focus:border-cyan-500 transition-all"
+                    onkeypress="if(event.key === 'Enter') performSearch()">
+            </div>
+        </div>
+        <div class="flex items-center gap-6 mono-small text-[10px] font-bold tracking-widest">
+            <button class="text-[10px] font-bold tracking-widest text-gray-400 hover:text-white transition" onclick="window.location.href='updatedlogin.html'">LOGIN</button>
+            <button class="text-cyan-500 border border-cyan-500/30 px-4 py-2 rounded uppercase hover:bg-cyan-500/10 transition">Join</button>
+        </div>
+    </nav>
+
+    <div class="absolute inset-y-0 left-0 w-1/2 glass-panel-left flex flex-col justify-center px-20 text-left items-start">
+        <div class="interactive max-w-lg mt-10">
+            <h4 id="telemetry-status" class="text-cyan-500 font-mono tracking-[0.5em] text-[10px] uppercase mb-2">System: Waiting for Input</h4>
+            <h1 id="region-name" class="text-8xl font-black mb-6 transition-all duration-1000 uppercase">Earth</h1>
+            
+            <div id="drill-down-box" class="hidden mb-8 p-4 border border-cyan-500/30 bg-cyan-500/5 rounded-lg">
+                <p class="text-[10px] text-cyan-500 font-mono mb-2 uppercase tracking-widest">Target Confirmed. Identify specific sub-location:</p>
+                <div class="flex gap-2">
+                    <input type="text" id="subInput" placeholder="CITY OR COORDINATES..." class="bg-black border border-white/20 rounded px-3 py-2 text-[10px] w-full font-mono">
+                    <button onclick="performSubSearch()" class="bg-cyan-600 px-4 py-2 text-[10px] font-bold hover:bg-cyan-500">GO</button>
+                </div>
+            </div>
+
+            <p id="region-info" class="text-gray-400 text-sm leading-relaxed mb-12 italic border-l-2 border-cyan-500 pl-6">
+                Awaiting primary vector. Search for a country to initialize administrative boundary mapping.
+            </p>
+        </div>
+    </div>
+
+    <div id="cesiumContainer"></div>
+
+    <footer class="absolute bottom-6 left-1/2 -translate-x-1/2 w-[95%] z-50">
+        <div class="glass-blur rounded-2xl p-6 flex items-center gap-12 border border-white/5 shadow-2xl">
+            <div class="flex flex-col border-r border-white/10 pr-10">
+                <span class="text-[9px] text-cyan-500 font-black tracking-[0.3em] uppercase mb-1">Execution</span>
+                <span class="text-xl font-black tracking-tighter uppercase">Begin Analysis</span>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="viewer.scene.morphTo2D(1.0)" class="text-[9px] font-bold border border-white/10 bg-white/5 px-4 py-2 hover:bg-cyan-500/20 transition uppercase">Satfusion 2D</button>
+                <button onclick="viewer.scene.morphTo3D(1.0)" class="text-[9px] font-bold border border-white/10 bg-white/5 px-4 py-2 hover:bg-cyan-500/20 transition uppercase">Satfusion 3D</button>
+            </div>
+            <div class="flex gap-4 border-l border-white/10 pl-10">
+                <button class="text-[9px] font-bold border border-white/10 bg-white/5 px-4 py-2 hover:bg-orange-500/20 transition uppercase">Image Analysis</button>
+                <button class="text-[9px] font-bold border border-white/10 bg-white/5 px-4 py-2 hover:bg-orange-500/20 transition uppercase">Dataset View</button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyMjVlMGNjZC1jNjE3LTQ2YTAtYmZjOC02NWY5MmJkODNkZjMiLCJpZCI6Mzc5MTI4LCJpYXQiOjE3Njg0ODUyMzh9.AAa1UiByA-EBfTIdBoUCvu8LTqcaEgY3FeeIffHR44E';
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false, geocoder: false, animation: false, timeline: false, infoBox: false
+        });
+
+        let primaryLocation = "";
+
+        // 1. PRIMARY SEARCH (Country Level)
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            document.getElementById('region-info').innerText = `LOCATING NATION: ${query.toUpperCase()}...`;
+            
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&featuretype=country`);
+                const data = await response.json();
+
+                if (data.length > 0) {
+                    primaryLocation = query;
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+
+                    document.getElementById('region-name').innerText = query.toUpperCase();
+                    document.getElementById('drill-down-box').classList.remove('hidden');
+                    document.getElementById('telemetry-status').innerText = "PRIMARY TARGET ACQUIRED";
+                    document.getElementById('telemetry-status').classList.add('searching-pulse');
+
+                    viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 5000000.0), // High altitude country view
+                        duration: 3
+                    });
+                }
+            } catch (e) { alert("Service error."); }
+        }
+
+        // 2. SUB-SEARCH (Drill Down to City/Location)
+        async function performSubSearch() {
+            const subQuery = document.getElementById('subInput').value;
+            if (!subQuery) return;
+
+            const fullQuery = `${subQuery}, ${primaryLocation}`;
+            document.getElementById('region-info').innerText = `DRILLING DOWN TO: ${subQuery.toUpperCase()}...`;
+
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}`);
+                const data = await response.json();
+
+                if (data.length > 0) {
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+
+                    document.getElementById('telemetry-status').innerText = "SUB-TARGET LOCKED";
+                    document.getElementById('telemetry-status').classList.remove('searching-pulse');
+                    
+                    // Create a target marker
+                    viewer.entities.removeAll();
+                    viewer.entities.add({
+                        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                        point: { pixelSize: 10, color: Cesium.Color.CYAN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+                        label: { text: subQuery.toUpperCase(), font: '12px JetBrains Mono', verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -10) }
+                    });
+
+                    viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 15000.0), // Low altitude city view
+                        orientation: { pitch: Cesium.Math.toRadians(-35) },
+                        duration: 3
+                    });
+                }
+            } catch (e) { alert("Location not found."); }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Terra Intelligence | Fixed Console</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;900&family=JetBrains+Mono&display=swap');
+        body { background-color: #05070a; margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; color: white; }
+        #cesiumContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        .glass { background: rgba(10, 15, 25, 0.75); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: auto; }
+        .ui-overlay { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 1.5rem; }
+    </style>
+</head>
+<body>
+
+    <div id="cesiumContainer"></div>
+
+    <div class="ui-overlay">
+        <header class="glass flex justify-between items-center px-8 py-4 rounded-xl">
+            <div class="flex items-center gap-6">
+                <div class="text-cyan-500 font-black tracking-tighter text-2xl italic">TERRA_INTEL</div>
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="SEARCH COUNTRY (e.g. INDIA)..." 
+                        class="bg-black/40 border border-white/10 rounded-full px-5 py-2 text-[10px] w-64 focus:border-cyan-500 outline-none transition-all pointer-events-auto"
+                        onkeypress="if(event.key === 'Enter') performSearch()">
+                </div>
+            </div>
+            <div class="flex items-center gap-4 pointer-events-auto">
+                <span class="text-[9px] font-mono text-gray-400 uppercase">Solar Cycle</span>
+                <input type="range" min="0" max="24" step="0.1" value="12" class="w-32" oninput="updateTime(this.value)">
+            </div>
+        </header>
+
+        <div class="flex justify-between items-end flex-1 mb-10">
+            <aside class="w-72 glass p-6 rounded-2xl flex flex-col gap-6">
+                <h3 class="text-cyan-500 font-mono text-[10px] tracking-[0.3em] uppercase">Telemetry</h3>
+                <div id="drill-down" class="hidden animate-pulse">
+                    <input type="text" id="subInput" placeholder="ENTER CITY..." 
+                        class="bg-black border border-white/20 rounded px-3 py-2 text-[10px] w-full font-mono mb-2 outline-none">
+                    <button onclick="performSubSearch()" class="w-full bg-cyan-600 py-2 text-[10px] font-bold uppercase">Execute Scan</button>
+                </div>
+                <p id="region-info" class="text-[11px] text-gray-400 italic leading-relaxed">System ready. Enter country to lock coordinates.</p>
+            </aside>
+
+            <div class="text-center">
+                <h1 id="targetName" class="text-9xl font-black tracking-tighter uppercase opacity-80">EARTH</h1>
+            </div>
+
+            <aside class="w-72 glass p-6 rounded-2xl">
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <span class="text-[9px] text-gray-500 uppercase">Condition</span>
+                        <div id="data-condition" class="text-xl font-bold font-mono">STABLE</div>
+                    </div>
+                    <div>
+                        <span class="text-[9px] text-gray-500 uppercase">Clouds</span>
+                        <button onclick="toggleClouds()" class="text-[10px] text-cyan-500 underline uppercase mt-1">Toggle Layer</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="glass rounded-xl p-4 flex justify-between items-center">
+            <div class="flex gap-2">
+                <button onclick="viewer.scene.morphTo2D(1.0)" class="text-[9px] font-bold border border-white/10 px-4 py-2 hover:bg-white/5 transition uppercase rounded">2D View</button>
+                <button onclick="viewer.scene.morphTo3D(1.0)" class="text-[9px] font-bold border border-white/10 px-4 py-2 hover:bg-white/5 transition uppercase rounded">3D View</button>
+            </div>
+            <div class="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Atmospheric Analytics Core v1.0.4</div>
+        </footer>
+    </div>
+
+    <script>
+        // REPLACE THIS WITH YOUR KEY OR THE CODE WILL SHOW A CESIUM ERROR
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyMjVlMGNjZC1jNjE3LTQ2YTAtYmZjOC02NWY5MmJkODNkZjMiLCJpZCI6Mzc5MTI4LCJpYXQiOjE3Njg0ODUyMzh9.AAa1UiByA-EBfTIdBoUCvu8LTqcaEgY3FeeIffHR44E';
+
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false, geocoder: false, animation: false, timeline: false, 
+            infoBox: false, selectionIndicator: false, navigationHelpButton: false,
+            shouldAnimate: true
+        });
+
+        viewer.scene.globe.enableLighting = true;
+        const cloudLayer = viewer.imageryLayers.addImageryProvider(new Cesium.IonImageryProvider({ assetId: 3812 }));
+
+        function toggleClouds() { cloudLayer.show = !cloudLayer.show; }
+
+        function updateTime(v) {
+            let d = new Date(); d.setUTCHours(v);
+            viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
+        }
+
+        async function performSearch() {
+            let q = document.getElementById('searchInput').value;
+            try {
+                let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&featuretype=country`);
+                let data = await res.json();
+                if(data[0]) {
+                    document.getElementById('targetName').innerText = q;
+                    document.getElementById('drill-down').classList.remove('hidden');
+                    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(parseFloat(data[0].lon), parseFloat(data[0].lat), 4000000) });
+                }
+            } catch(e) { console.error("Search Failed", e); }
+        }
+
+        async function performSubSearch() {
+            let city = document.getElementById('subInput').value;
+            let country = document.getElementById('targetName').innerText;
+            try {
+                let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${city},${country}`);
+                let data = await res.json();
+                if(data[0]) {
+                    viewer.camera.flyTo({ 
+                        destination: Cesium.Cartesian3.fromDegrees(parseFloat(data[0].lon), parseFloat(data[0].lat), 20000),
+                        orientation: { pitch: Cesium.Math.toRadians(-35) }
+                    });
+                }
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>

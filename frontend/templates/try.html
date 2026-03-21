@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #cesiumContainer { position: absolute; top: 0; left: 0; height: 100%; width: 100%; margin: 0; overflow: hidden; }
+        .glass { background: rgba(10, 15, 25, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(0, 255, 255, 0.2); pointer-events: auto; }
+        .hud-left { position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-black">
+
+    <div id="cesiumContainer"></div>
+
+    <div class="hud-left flex flex-col gap-4">
+        <div class="glass p-6 rounded-2xl w-80 text-white">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-cyan-400 font-bold tracking-tighter text-xl underline decoration-orange-500">MISSION DATA</h1>
+                <div class="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+            </div>
+
+            <div class="mb-4">
+                <p id="city-name" class="text-2xl font-bold leading-tight">Global Ocean</p>
+                <p id="region-name" class="text-[10px] text-gray-400 uppercase tracking-widest mt-1">International Waters</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                    <span class="text-[9px] text-cyan-500 block">LOCAL TIME</span>
+                    <span id="local-time" class="text-lg font-mono">--:--</span>
+                </div>
+                <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                    <span class="text-[9px] text-orange-500 block">TEMPERATURE</span>
+                    <span id="temp-val" class="text-lg font-mono">--°C</span>
+                </div>
+            </div>
+
+            <div class="text-[10px] space-y-1 font-mono text-gray-400">
+                <div class="flex justify-between"><span>LAT:</span> <span id="lat">0.00</span></div>
+                <div class="flex justify-between"><span>LON:</span> <span id="lon">0.00</span></div>
+                <div class="flex justify-between"><span>WIND:</span> <span id="wind-speed">-- km/h</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyMjVlMGNjZC1jNjE3LTQ2YTAtYmZjOC02NWY5MmJkODNkZjMiLCJpZCI6Mzc5MTI4LCJpYXQiOjE3Njg0ODUyMzh9.AAa1UiByA-EBfTIdBoUCvu8LTqcaEgY3FeeIffHR44E';
+        
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false,
+            geocoder: true
+        });
+
+        // THROTTE LOGIC (Prevents crashing APIs)
+        let lastUpdate = 0;
+
+        async function updateIntelligence(lat, lon) {
+            const now = Date.now();
+            if (now - lastUpdate < 2000) return; // Only update every 2 seconds
+            lastUpdate = now;
+
+            try {
+                // 1. Get Place Name & Timezone
+                const locRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+                const locData = await locRes.json();
+                
+                // 2. Get Weather Data (Open-Meteo)
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+
+                // 3. Update UI
+                document.getElementById('city-name').innerText = locData.city || locData.locality || "Remote Area";
+                document.getElementById('region-name').innerText = `${locData.principalSubdivision}, ${locData.countryName}`;
+                document.getElementById('temp-val').innerText = `${weatherData.current_weather.temperature}°C`;
+                document.getElementById('wind-speed').innerText = `${weatherData.current_weather.windspeed} km/h`;
+
+                // 4. Calculate Local Time
+                const date = new Date();
+                // Simple version: use browser time or integrate a timezone offset from an API
+                document.getElementById('local-time').innerText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+            } catch (e) { console.log("Intel fetch error"); }
+        }
+
+        // MOUSE MOVEMENT INTERACTION
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction((movement) => {
+            const cartesian = viewer.camera.pickEllipsoid(movement.endPosition);
+            if (cartesian) {
+                const carto = Cesium.Cartographic.fromCartesian(cartesian);
+                const lat = Cesium.Math.toDegrees(carto.latitude);
+                const lon = Cesium.Math.toDegrees(carto.longitude);
+
+                document.getElementById('lat').innerText = lat.toFixed(3);
+                document.getElementById('lon').innerText = lon.toFixed(3);
+
+                updateIntelligence(lat, lon);
+            }
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    </script>
+</body>
+</html>

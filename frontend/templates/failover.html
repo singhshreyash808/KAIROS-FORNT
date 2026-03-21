@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SatFusion | Decadal Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/gh/google/earthengine-api@master/javascript/build/ee_api_js.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <style>
+        body { background: #02030a; color: white; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #galaxy-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+        .glass { background: rgba(13, 17, 23, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+        #map { height: calc(100vh - 80px); width: 100%; border-radius: 20px; }
+        .hidden { display: none; }
+        input { background: rgba(0,0,0,0.5) !important; color: white !important; border: 1px solid rgba(255,255,255,0.2) !important; }
+    </style>
+</head>
+<body>
+
+    <canvas id="galaxy-bg"></canvas>
+
+    <div id="auth-overlay" class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60">
+        <div class="glass w-96 p-8 rounded-3xl text-center shadow-2xl">
+            <h2 id="auth-title" class="text-2xl font-bold mb-2 tracking-tighter text-cyan-400 uppercase italic">SatFusion Portal</h2>
+            <p id="auth-subtitle" class="text-[10px] text-gray-400 mb-6 uppercase tracking-widest">Orbital Data Access</p>
+            
+            <div class="space-y-4">
+                <input type="text" id="reg-name" placeholder="Full Name" class="w-full p-3 rounded-xl outline-none hidden">
+                <input type="email" id="email" placeholder="Mission Email" class="w-full p-3 rounded-xl outline-none">
+                <input type="password" id="password" placeholder="Security Key" class="w-full p-3 rounded-xl outline-none">
+            </div>
+
+            <button id="auth-main-btn" class="w-full py-3 mt-6 rounded-xl bg-cyan-600 font-bold hover:bg-cyan-500 transition-all uppercase text-xs tracking-widest">Login</button>
+            
+            <div id="google-div" class="my-4">
+                <div class="flex items-center opacity-30 mb-4"><hr class="flex-1"> <span class="px-3 text-[10px]">OR</span> <hr class="flex-1"></div>
+                <button id="google-btn" class="w-full py-3 rounded-xl bg-white text-black font-bold flex items-center justify-center gap-2 text-xs">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="16"> Google Workspace
+                </button>
+            </div>
+
+            <p class="mt-6 text-[10px] text-gray-500">
+                <span id="toggle-msg">New to mission?</span> 
+                <button onclick="toggleAuthMode()" class="text-cyan-400 font-bold hover:underline ml-1">Signup</button>
+            </p>
+        </div>
+    </div>
+
+    <div id="dashboard-ui" class="hidden h-screen flex flex-col p-4">
+        <header class="flex justify-between items-center mb-4 px-2">
+            <div>
+                <h1 class="text-lg font-bold tracking-tighter text-cyan-500 italic">SATFUSION <span class="text-gray-600 ml-2"></span></h1>
+                <p class="text-[9px] text-gray-500 uppercase tracking-widest" id="welcome-msg">STANDBY...</p>
+            </div>
+            <div class="flex gap-3">
+                <select id="yearPast" class="bg-gray-900 text-[10px] p-2 rounded border border-white/10 outline-none">
+                    <option value="2016">Past: 2016</option>
+                    <option value="2018">Past: 2018</option>
+                </select>
+                <select id="yearPresent" class="bg-gray-900 text-[10px] p-2 rounded border border-white/10 outline-none">
+                    <option value="2025">Present: 2025</option>
+                    <option value="2026" selected>Present: 2026</option>
+                </select>
+                <button id="gee-connect" class="bg-blue-600 px-4 py-2 rounded text-[10px] font-bold">CONNECT GEE</button>
+                <button onclick="logout()" class="text-[9px] text-red-400 font-bold uppercase ml-4">Logout</button>
+            </div>
+        </header>
+
+        <div class="flex-1 relative">
+            <div id="map"></div>
+            
+            <div id="results" class="absolute bottom-6 left-6 z-[1000] glass p-6 rounded-3xl w-72 hidden">
+                <h3 class="text-[10px] text-gray-500 uppercase mb-4 tracking-widest">Analysis Result</h3>
+                <div id="change-val" class="text-4xl font-bold mb-1">0%</div>
+                <p class="text-[10px] text-gray-400 leading-relaxed mb-4">Vegetation health variance detected across selected timeframe.</p>
+                <div class="space-y-2 border-t border-white/10 pt-4">
+                    <div class="flex justify-between text-[10px]"><span class="text-gray-500" id="label-past">2016 NDVI</span> <span id="val-past">0.00</span></div>
+                    <div class="flex justify-between text-[10px]"><span class="text-gray-500" id="label-present">2026 NDVI</span> <span id="val-present">0.00</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCXOKzOkQHGh1yJ8BDrIwibm8HZK8i91vY",
+            authDomain: "satfussion.firebaseapp.com",
+            projectId: "satfussion",
+            storageBucket: "satfussion.firebasestorage.app",
+            messagingSenderId: "419400121975",
+            appId: "1:419400121975:web:66226e2257cbd8f0acd072"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        // 1. AUTH LOGIC
+        let isLogin = true;
+        window.toggleAuthMode = () => {
+            isLogin = !isLogin;
+            document.getElementById('auth-title').innerText = isLogin ? "SatFusion Portal" : "Create Mission Profile";
+            document.getElementById('auth-main-btn').innerText = isLogin ? "Login" : "Register";
+            document.getElementById('reg-name').classList.toggle('hidden');
+            document.getElementById('google-div').classList.toggle('hidden');
+        };
+
+        document.getElementById('auth-main-btn').onclick = async () => {
+            const e = document.getElementById('email').value;
+            const p = document.getElementById('password').value;
+            const n = document.getElementById('reg-name').value;
+            try {
+                if(isLogin) { await signInWithEmailAndPassword(auth, e, p); }
+                else { 
+                    const res = await createUserWithEmailAndPassword(auth, e, p);
+                    await updateProfile(res.user, { displayName: n });
+                }
+            } catch(err) { alert(err.message); }
+        };
+
+        document.getElementById('google-btn').onclick = () => signInWithPopup(auth, provider);
+        window.logout = () => signOut(auth);
+
+        onAuthStateChanged(auth, (user) => {
+            if(user) {
+                document.getElementById('auth-overlay').classList.add('hidden');
+                document.getElementById('dashboard-ui').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = `Welcome Agent: ${user.displayName || user.email}`;
+                initMap();
+            } else {
+                document.getElementById('auth-overlay').classList.remove('hidden');
+                document.getElementById('dashboard-ui').classList.add('hidden');
+            }
+        });
+    </script>
+
+    <script>
+        // 2. GEE & MAP LOGIC
+        const GEE_CLIENT_ID = "295622009979-sacivcspkkkqnof19i4qi27jbb7mt2nm.apps.googleusercontent.com"; // Replace Me
+        
+        let map, drawnItems, currentAOI;
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map').setView([28.6139, 77.2090], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+            const drawControl = new L.Control.Draw({
+                draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false },
+                edit: { featureGroup: drawnItems }
+            });
+            map.addControl(drawControl);
+
+            map.on(L.Draw.Event.CREATED, (e) => {
+                drawnItems.clearLayers();
+                drawnItems.addLayer(e.layer);
+                currentAOI = ee.Geometry(e.layer.toGeoJSON().geometry);
+                runGEEAnalysis();
+            });
+        }
+
+        document.getElementById('gee-connect').onclick = () => {
+            ee.data.authenticateViaPopup(() => {
+                ee.initialize(null, null, () => alert("Satellite Uplink Established. Draw an area to begin."));
+            });
+        };
+
+        function runGEEAnalysis() {
+            if(!currentAOI) return;
+            const yP = document.getElementById('yearPast').value;
+            const yPr = document.getElementById('yearPresent').value;
+
+            // Fetch Past (Sentinel-2)
+            const pastImg = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(currentAOI).filterDate(yP+'-01-01', yP+'-12-31').median();
+            const ndviP = pastImg.normalizedDifference(['B8', 'B4']).clip(currentAOI);
+
+            // Fetch Present (Landsat 9 with Failover)
+            const l9Col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2")
+                .filterBounds(currentAOI).filterDate(yPr+'-01-01', yPr+'-12-31').sort('CLOUD_COVER');
+            
+            const presentImg = ee.Image(ee.Algorithms.If(l9Col.size().gt(0), l9Col.first(), 
+                ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(currentAOI).filterDate(yPr+'-01-01', yPr+'-12-31').median()
+            )).clip(currentAOI);
+
+            const ndviPr = ee.Image(ee.Algorithms.If(l9Col.size().gt(0), 
+                presentImg.normalizedDifference(['B5', 'B4']), presentImg.normalizedDifference(['B8', 'B4'])
+            ));
+
+            // Statistics
+            const statsP = ndviP.reduceRegion({reducer: ee.Reducer.mean(), geometry: currentAOI, scale: 30});
+            const statsPr = ndviPr.reduceRegion({reducer: ee.Reducer.mean(), geometry: currentAOI, scale: 30});
+
+            statsP.evaluate((resP) => {
+                statsPr.evaluate((resPr) => {
+                    const vP = resP.nd || 0.1;
+                    const vPr = resPr.nd || 0.1;
+                    const diff = ((vPr - vP) / vP * 100).toFixed(2);
+                    
+                    document.getElementById('results').classList.remove('hidden');
+                    document.getElementById('change-val').innerText = (diff > 0 ? "+" : "") + diff + "%";
+                    document.getElementById('change-val').style.color = diff > 0 ? "#4ade80" : "#f87171";
+                    document.getElementById('val-past').innerText = vP.toFixed(3);
+                    document.getElementById('val-present').innerText = vPr.toFixed(3);
+                });
+            });
+
+            ndviPr.getMap({min: 0, max: 0.7, palette: ['#ff4b4b', '#ffeb3b', '#4caf50']}, (m) => {
+                L.tileLayer(m.urlFormat).addTo(map);
+            });
+        }
+    </script>
+
+    <script>
+        // GALAXY BACKGROUND ANIMATION
+        const canvas = document.getElementById("galaxy-bg");
+        const ctx = canvas.getContext("2d");
+        let stars = [];
+        function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+        window.onresize = resize; resize();
+        for (let i = 0; i < 400; i++) stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, z: Math.random()*canvas.width });
+        function draw() {
+            ctx.fillStyle = "#02030a"; ctx.fillRect(0,0,canvas.width,canvas.height);
+            stars.forEach(s => {
+                s.z -= 0.5; if(s.z <= 0) s.z = canvas.width;
+                let sx = (s.x - canvas.width/2) * (canvas.width/s.z) + canvas.width/2;
+                let sy = (s.y - canvas.height/2) * (canvas.width/s.z) + canvas.height/2;
+                let size = (1 - s.z/canvas.width) * 3;
+                ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(sx, sy, size, 0, Math.PI*2); ctx.fill();
+            });
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SatFusion | Verified Connection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/gh/google/earthengine-api@master/javascript/build/ee_api_js.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <style>
+        body { background: #02040a; color: white; font-family: sans-serif; }
+        #map { height: 70vh; width: 100%; border-radius: 15px; margin-top: 10px; border: 1px solid #1e293b; }
+        .glass { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center glass p-6 rounded-2xl mb-4">
+            <div>
+                <h1 class="text-xl font-bold text-cyan-400 italic">SATFUSION ANALYTICS</h1>
+                <p id="conn-status" class="text-[10px] text-red-500 font-bold uppercase tracking-widest">Status: Disconnected</p>
+            </div>
+            
+            <div class="flex gap-4 items-center">
+                <select id="userYear" class="bg-slate-800 text-xs p-2 rounded border border-slate-700">
+                    <option value="2016">Compare: 2016</option>
+                    <option value="2020">Compare: 2020</option>
+                    <option value="2026" selected>Current: 2026</option>
+                </select>
+                <button id="login-btn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-2 rounded-full text-xs font-bold transition-all">CONNECT GOOGLE</button>
+            </div>
+        </header>
+
+        <div id="map"></div>
+
+        <div id="result-panel" class="hidden mt-4 glass p-6 rounded-2xl animate-fade-in">
+            <h2 class="text-sm font-bold text-gray-400 uppercase mb-2">Analysis Result</h2>
+            <div id="ndvi-output" class="text-3xl font-bold text-green-400">---</div>
+            <p class="text-xs text-gray-500 mt-1">Vegetation health detected in your drawn area.</p>
+        </div>
+    </div>
+
+    <script>
+        // 1. CONFIGURATION
+        const CLIENT_ID = "295622009979-sacivcspkkkqnof19i4qi27jbb7mt2nm.apps.googleusercontent.com"; // Replace Me
+        ee.data.setOAuthClientId(CLIENT_ID);
+        let map, drawnItems, currentAOI;
+
+        // 2. INITIALIZE LEAFLET
+        map = L.map('map').setView([28.6139, 77.2090], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+        const drawControl = new L.Control.Draw({
+            draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false },
+            edit: { featureGroup: drawnItems }
+        });
+        map.addControl(drawControl);
+
+        // 3. AUTHENTICATION LOGIC
+        document.getElementById('login-btn').onclick = () => {
+            document.getElementById('conn-status').innerText = "Status: Opening Popup...";
+            
+            ee.data.authenticateViaPopup(() => {
+                // This is the CRITICAL fix: waiting for the token to be set
+                document.getElementById('conn-status').innerText = "Status: Initializing Library...";
+                
+                ee.initialize(null, null, () => {
+                    document.getElementById('conn-status').innerText = "Status: Connected ✅";
+                    document.getElementById('conn-status').classList.replace('text-red-500', 'text-green-500');
+                    document.getElementById('login-btn').style.display = "none";
+                }, (error) => {
+                    document.getElementById('conn-status').innerText = "Init Error: " + error;
+                });
+            }, (error) => {
+                document.getElementById('conn-status').innerText = "Auth Error: " + error;
+            });
+        };
+
+        // 4. DRAWING & ANALYSIS
+        map.on(L.Draw.Event.CREATED, (e) => {
+            drawnItems.clearLayers();
+            drawnItems.addLayer(e.layer);
+            
+            const selection = e.layer.toGeoJSON();
+            currentAOI = ee.Geometry(selection.geometry);
+            
+            runAnalysis();
+        });
+
+        function runAnalysis() {
+            if (!currentAOI) return;
+            const year = document.getElementById('userYear').value;
+
+            // Fetch Data
+            const collection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(currentAOI)
+                .filterDate(year + '-01-01', year + '-12-31')
+                .median();
+
+            const ndvi = collection.normalizedDifference(['B8', 'B4']).clip(currentAOI);
+
+            // Get Numerical Result
+            const stats = ndvi.reduceRegion({
+                reducer: ee.Reducer.mean(),
+                geometry: currentAOI,
+                scale: 30
+            });
+
+            stats.evaluate((result) => {
+                const val = result.nd || 0;
+                document.getElementById('result-panel').classList.remove('hidden');
+                document.getElementById('ndvi-output').innerText = "NDVI: " + val.toFixed(3);
+            });
+
+            // Add Layer to Map
+            ndvi.getMap({min: 0, max: 0.8, palette: ['red', 'yellow', 'green']}, (mapId) => {
+                L.tileLayer(mapId.urlFormat).addTo(map);
+            });
+        }
+    </script>
+</body>
+</html>

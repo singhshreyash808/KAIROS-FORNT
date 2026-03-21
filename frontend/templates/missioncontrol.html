@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>SatFusion | Failover System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #02030a; color: white; font-family: 'Inter', sans-serif; }
+        .status-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        .pulse-green { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: pulse 2s infinite; }
+        @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        .error-glow { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tighter text-cyan-400">MISSION REDUNDANCY CONTROL</h1>
+                <p class="text-xs text-gray-500 uppercase tracking-widest">Autonomous Data Fusion Active</p>
+            </div>
+            <div id="system-status" class="px-4 py-2 rounded-full bg-green-500/10 border border-green-500/50 text-green-400 text-[10px] font-bold">
+                SYSTEM OPERATIONAL
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div id="sat-primary" class="status-card p-6 rounded-3xl transition-all duration-500">
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[10px] bg-white/10 px-2 py-1 rounded text-gray-300 uppercase">Primary</span>
+                    <div id="status-dot-1" class="w-3 h-3 rounded-full bg-green-500 pulse-green"></div>
+                </div>
+                <h3 class="text-xl font-bold mb-1">LANDSAT 9</h3>
+                <p class="text-xs text-gray-400 mb-6">NASA / USGS Constellation</p>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between text-[10px] border-b border-white/5 pb-2">
+                        <span class="text-gray-500">Signal Strength</span>
+                        <span id="signal-1">98%</span>
+                    </div>
+                    <div class="flex justify-between text-[10px] border-b border-white/5 pb-2">
+                        <span class="text-gray-500">Cloud Cover</span>
+                        <span id="cloud-1">12%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sat-secondary" class="status-card p-6 rounded-3xl opacity-50 grayscale transition-all duration-500">
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[10px] bg-white/10 px-2 py-1 rounded text-gray-300 uppercase">Backup</span>
+                    <div id="status-dot-2" class="w-3 h-3 rounded-full bg-gray-600"></div>
+                </div>
+                <h3 class="text-xl font-bold mb-1">SENTINEL-2</h3>
+                <p class="text-xs text-gray-400 mb-6">ESA / Copernicus Hub</p>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between text-[10px] border-b border-white/5 pb-2">
+                        <span class="text-gray-500">Status</span>
+                        <span id="signal-2">STANDBY</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-card p-6 rounded-3xl col-span-1">
+                <h4 class="text-[10px] font-bold text-gray-500 uppercase mb-4">Logic Logs</h4>
+                <div id="logs" class="text-[9px] font-mono space-y-2 text-cyan-200/60">
+                    <p>> [08:00] Monitoring Landsat 9...</p>
+                    <p>> [08:01] Data stream healthy.</p>
+                </div>
+                <button onclick="simulateFailure()" class="mt-6 w-full py-2 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-bold rounded-lg hover:bg-red-500/40 transition-all">
+                    SIMULATE SENSOR FAILURE
+                </button>
+            </div>
+
+        </div>
+
+        <div class="mt-8 status-card h-64 rounded-3xl flex items-center justify-center relative overflow-hidden">
+            <div id="map-indicator" class="absolute top-4 left-4 bg-black/60 px-3 py-1 rounded text-[9px] font-bold border border-cyan-500/50">
+                CURRENT FEED: LANDSAT 9
+            </div>
+            <img id="map-img" src="https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&q=80&w=1000" class="w-full h-full object-cover opacity-40">
+            <div class="absolute inset-0 bg-gradient-to-t from-[#02030a] to-transparent"></div>
+        </div>
+    </div>
+
+    <script>
+        function addLog(msg) {
+            const logs = document.getElementById('logs');
+            const p = document.createElement('p');
+            p.innerText = `> [${new Date().toLocaleTimeString()}] ${msg}`;
+            logs.prepend(p);
+        }
+
+        function simulateFailure() {
+            addLog("CRITICAL: Landsat 9 Signal Lost!");
+            
+            // UI Changes for Primary
+            const primary = document.getElementById('sat-primary');
+            const dot1 = document.getElementById('status-dot-1');
+            primary.classList.add('error-glow');
+            dot1.classList.replace('bg-green-500', 'bg-red-500');
+            dot1.classList.remove('pulse-green');
+            document.getElementById('signal-1').innerText = "0% (ERROR)";
+
+            // Failover Logic
+            setTimeout(() => {
+                addLog("Redundancy Protocol Initiated...");
+                addLog("Switching to Sentinel-2 (ESA)...");
+
+                const secondary = document.getElementById('sat-secondary');
+                const dot2 = document.getElementById('status-dot-2');
+                
+                secondary.classList.remove('opacity-50', 'grayscale');
+                secondary.classList.add('border-cyan-500/50');
+                dot2.classList.replace('bg-gray-600', 'bg-green-500');
+                dot2.classList.add('pulse-green');
+                
+                document.getElementById('signal-2').innerText = "94% (ACTIVE)";
+                document.getElementById('map-indicator').innerText = "CURRENT FEED: SENTINEL-2";
+                document.getElementById('system-status').innerText = "RUNNING ON BACKUP";
+                document.getElementById('system-status').classList.replace('text-green-400', 'text-orange-400');
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

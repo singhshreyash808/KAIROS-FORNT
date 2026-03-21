@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Weather Interactive Earth</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; color: white; font-family: 'Segoe UI', sans-serif; }
+        #info-box {
+            position: absolute; top: 40px; left: 40px;
+            width: 250px; height: 260px; 
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            padding: 20px; border-radius: 4px;
+            z-index: 100; pointer-events: none;
+        }
+        #place-name { font-size: 20px; font-weight: bold; margin-bottom: 15px; color: #00d2ff; text-transform: uppercase; }
+        ul { list-style: none; padding: 0; }
+        li { margin-bottom: 12px; font-size: 13px; }
+        li strong { color: #888; display: block; font-size: 10px; letter-spacing: 1px; }
+        .loading { opacity: 0.5; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <div id="info-box">
+        <div id="place-name">Hover Earth</div>
+        <ul>
+            <li><strong>Coordinates</strong> <span id="coords">0.00, 0.00</span></li>
+            <li><strong>Current Weather</strong> <span id="weather">Waiting...</span></li>
+            <li><strong>Space organization</strong> <span id="org">Scanning...</span></li>
+            <li><strong>Timezone</strong> <span id="day-night">--</span></li>
+        </ul>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- INITIAL SCENE SETUP ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const loader = new THREE.TextureLoader();
+const earthTex = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg');
+
+const earthGroup = new THREE.Group();
+const earth = new THREE.Mesh(
+    new THREE.SphereGeometry(2, 64, 64),
+    new THREE.MeshPhongMaterial({ map: earthTex, shininess: 8 })
+);
+earth.rotation.y = -Math.PI / 2; 
+earthGroup.add(earth);
+scene.add(earthGroup);
+
+// --- WHITE PULSING GLOW DOT ---
+const glowDot = new THREE.Mesh(
+    new THREE.SphereGeometry(0.02, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+);
+scene.add(glowDot);
+
+scene.add(new THREE.AmbientLight(0x555555));
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.position.set(5, 3, 5);
+scene.add(sun);
+camera.position.z = 6;
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// --- FULL SPACE ORGANIZATION DATABASE ---
+const agencies = {
+    "USA": "NASA", "Russia": "Roscosmos", "China": "CNSA", "India": "ISRO",
+    "Japan": "JAXA", "France": "CNES", "Germany": "DLR", "Italy": "ASI",
+    "United Kingdom": "UK Space Agency", "Spain": "INTA", "Netherlands": "NSO",
+    "Sweden": "SNSA", "Norway": "NOSA", "Switzerland": "Swiss Space Office",
+    "Belgium": "BELSPO", "Canada": "CSA", "Brazil": "AEB", "Argentina": "CONAE",
+    "Mexico": "AEM", "Chile": "CNSA (Chile)", "South Korea": "KARI",
+    "North Korea": "NADA", "Taiwan": "TASA", "Thailand": "GISTDA",
+    "Indonesia": "LAPAN", "Malaysia": "MYSA", "Vietnam": "VNSC",
+    "Philippines": "PhilSA", "Singapore": "OSTIn", "Israel": "ISA",
+    "Iran": "ISA", "Turkey": "TUA", "Pakistan": "SUPARCO",
+    "Saudi Arabia": "SSA", "United Arab Emirates": "UAESA",
+    "Kazakhstan": "KazCosmos", "Australia": "ASA", "New Zealand": "NZSA",
+    "South Africa": "SANSA", "Egypt": "EgSA", "Nigeria": "NASRDA",
+    "Algeria": "ASAL", "Morocco": "CRTS", "Ukraine": "SSAU",
+    "Belarus": "BSA", "Romania": "ROSA", "Poland": "POLSA",
+    "Czech Republic": "CSO", "Hungary": "HSO", "Austria": "ALR",
+    "Portugal": "Portugal Space", "Greece": "HSA", "Luxembourg": "LSA",
+    "Azerbaijan": "Azercosmos", "Armenia": "ArmCosmos", "Bolivia": "ABE",
+    "Sri Lanka": "SUPARCO-SL", "Bangladesh": "SPARRSO", "Nepal": "Nepal Space Research",
+    "Antarctica": "Antarctic Treaty System", "Greenland": "ESA / Danish Space"
+};
+
+// --- WATER & LANDMASS OVERRIDES ---
+function getBodyOfWater(lat, lon) {
+    if (lat > 60 && lat < 85 && lon > -75 && lon < -10) return "Greenland";
+    if (lat < -60) return "Antarctica";
+    if (lat > 5 && lat < 25 && lon > 55 && lon < 77) return "Arabian Sea";
+    if (lat > 5 && lat < 22 && lon > 78 && lon < 95) return "Bay of Bengal";
+    if (lat > -60 && lat < 30 && lon > 30 && lon < 110) return "Indian Ocean";
+    if (lon > -70 && lon < 20) return "Atlantic Ocean";
+    if (lat > 70) return "Arctic Ocean";
+    return "Pacific Ocean";
+}
+
+function getTimeZoneData(lon) {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const offset = lon / 15;
+    const local = new Date(utc + (3600000 * offset));
+    
+    let abbr = "GMT";
+    if (lon > 67 && lon < 97) abbr = "IST";
+    else if (lon > -125 && lon < -65) abbr = "EST";
+    else if (lon > 120 && lon < 150) abbr = "JST";
+    else if (lon > -10 && lon < 30) abbr = "CET";
+
+    const timeStr = local.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const isDay = local.getHours() >= 6 && local.getHours() < 18 ? "Day" : "Night";
+
+    return { display: `${abbr}: ${timeStr}`, dayNight: isDay };
+}
+
+let fetchToken = 0;
+
+async function fetchFullData(lat, lon) {
+    const token = ++fetchToken;
+    const body = getBodyOfWater(lat, lon);
+
+    // Hard-coded check for Greenland/Antarctica to prevent "Ocean" errors
+    if (body === "Antarctica" || body === "Greenland") {
+        updateUI(body, agencies[body]);
+        fetchWeather(lat, lon, token);
+        return;
+    }
+
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=5&addressdetails=1`);
+        const data = await res.json();
+        
+        if (token === fetchToken) {
+            if (data && data.address) {
+                const country = data.address.country || "Unknown";
+                const state = data.address.state || data.address.province || data.address.region || "";
+                
+                // Formatting: Country (State)
+                const fullName = state ? `${country} (${state})` : country;
+                
+                updateUI(fullName, agencies[country] || "Global Research");
+            } else {
+                updateUI(body, "Maritime Satellite Network");
+            }
+        }
+    } catch (e) { console.warn("API Overloaded"); }
+    fetchWeather(lat, lon, token);
+}
+
+function updateUI(place, org) {
+    document.getElementById('place-name').innerText = place;
+    document.getElementById('org').innerText = org;
+}
+
+async function fetchWeather(lat, lon, id) {
+    try {
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const wData = await wRes.json();
+        if (id === fetchToken && wData.current_weather) {
+            document.getElementById('weather').innerText = `${wData.current_weather.temperature}°C`;
+        }
+    } catch (e) { document.getElementById('weather').innerText = "--°C"; }
+}
+
+// --- MOUSE & RAYCAST ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let moveDelay;
+
+window.addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(earth);
+
+    if (intersects.length > 0) {
+        glowDot.visible = true;
+        const uv = intersects[0].uv;
+        glowDot.position.copy(intersects[0].point).multiplyScalar(1.01);
+
+        let lon = (uv.x * 360) - 180;
+        let lat = (uv.y * 180) - 90;
+
+        const tz = getTimeZoneData(lon);
+        document.getElementById('coords').innerText = `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
+        document.getElementById('day-night').innerText = `${tz.display} (${tz.dayNight})`;
+        
+        clearTimeout(moveDelay);
+        moveDelay = setTimeout(() => fetchFullData(lat, lon), 200);
+    } else {
+        glowDot.visible = false;
+    }
+});
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (glowDot.visible) {
+        const p = 1 + Math.sin(Date.now() * 0.01) * 0.3;
+        glowDot.scale.set(p, p, p);
+    }
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+    </script>
+</body>
+</html>

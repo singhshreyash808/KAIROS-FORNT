@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SatFusion Platform</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<style>* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", sans-serif;
+}
+.auth-container {
+  width: 320px;
+  margin: 120px auto;
+  padding: 30px;
+  text-align: center;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
+
+.auth-container h2 {
+  margin-bottom: 20px;
+}
+
+.link-text {
+  margin-top: 15px;
+  font-size: 0.9rem;
+}
+
+.link-text a {
+  color: #00d2ff;
+  text-decoration: none;
+}
+
+
+body {
+  min-height: 100vh;
+  color: #fff;
+  background: #02030a;
+  overflow-x: hidden;
+}
+
+/* Space canvas */
+#space-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+}
+
+/* Gradient overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(0,80,255,0.2), #02030a 70%);
+  z-index: -1;
+}
+
+/* Header */
+header {
+  text-align: center;
+  padding: 50px 20px;
+}
+
+header h1 {
+  font-size: 3rem;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+header p {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
+/* Layout */
+main {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 35px;
+  padding-bottom: 60px;
+}
+
+/* Glass cards */
+.glass-card {
+  width: 300px;
+  padding: 28px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+  animation: floatUp 1.2s ease;
+}
+
+.glass-card h2 {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+/* Inputs */
+input, select {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  border: none;
+  outline: none;
+}
+
+/* Buttons */
+button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0,210,255,0.5);
+}
+
+/* Floating animation */
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
+
+<body>
+
+<!-- Animated Space Background -->
+<canvas id="space-bg"></canvas>
+
+<div class="overlay"></div>
+
+
+<div class="auth-container">
+  <h2>Login to SatFusion</h2>
+
+  <input type="email" id="loginEmail" placeholder="Email">
+  <input type="password" id="loginPassword" placeholder="Password">
+
+  <button onclick="login()">Login</button>
+
+  <p class="link-text">
+    New user? <a href="signup.html">Create an account</a>
+  </p>
+</div>
+
+<script src="/static/js/space.js"></script>
+<script src="/static/js/auth.js"></script>
+</body>
+</html>
+
+
+<script>
+//login
+// SIGNUP
+function signup() {
+  const email = document.getElementById("signupEmail").value;
+  const password = document.getElementById("signupPassword").value;
+
+  if (!email || !password) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  // Check if user already exists
+  if (localStorage.getItem(email)) {
+    alert("User already registered. Please login.");
+    window.location.href = "login.html";
+    return;
+  }
+
+  // Save user
+  localStorage.setItem(email, password);
+  localStorage.setItem("loggedInUser", email);
+
+  window.location.href = "dashboard.html";
+}
+
+// LOGIN
+function login() {
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+
+  const storedPassword = localStorage.getItem(email);
+
+  if (!storedPassword) {
+    alert("User not registered. Redirecting to signup.");
+    window.location.href = "signup.html";
+    return;
+  }
+
+  if (storedPassword !== password) {
+    alert("Incorrect password");
+    return;
+  }
+
+  localStorage.setItem("loggedInUser", email);
+  window.location.href = "dashboard.html";
+}
+
+// PROTECT DASHBOARD
+if (window.location.pathname.includes("dashboard")) {
+  if (!localStorage.getItem("loggedInUser")) {
+    window.location.href = "login.html";
+  }
+}
+
+// LOGOUT
+function logout() {
+  localStorage.removeItem("loggedInUser");
+  window.location.href = "login.html";
+}
+
+//
+const canvas = document.getElementById("space-bg");
+const ctx = canvas.getContext("2d");
+
+let stars = [];
+const COUNT = 250;
+
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+}
+resize();
+addEventListener("resize", resize);
+
+for (let i = 0; i < COUNT; i++) {
+  stars.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.6,
+    v: Math.random() * 0.6 + 0.2
+  });
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    s.y += s.v;
+    if (s.y > canvas.height) {
+      s.y = 0;
+      s.x = Math.random() * canvas.width;
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>

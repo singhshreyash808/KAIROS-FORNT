@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SatFusion | Multi-Satellite Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<style>
+    /* HOME PAGE */
+.hero {
+  min-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: radial-gradient(circle at top, #0b1a2d, #02030a);
+  color: #fff;
+}
+
+.hero h1 {
+  font-size: 3.5rem;
+  background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-buttons {
+  margin-top: 25px;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 12px 28px;
+  border-radius: 25px;
+  margin: 0 10px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+  color: white;
+}
+
+.btn-secondary {
+  border: 1px solid #00d2ff;
+  color: #00d2ff;
+}
+
+.section {
+  padding: 60px 12%;
+}
+
+.section.dark {
+  background: rgba(255,255,255,0.03);
+}
+
+.section h2 {
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.info-card, .level-card, .pipeline {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(0,0,0,0.4);
+}
+
+.points {
+  max-width: 700px;
+  margin: auto;
+  list-style: none;
+}
+
+.points li {
+  margin: 12px 0;
+}
+
+.cta {
+  padding: 70px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, #00d2ff22, #3a7bd522);
+}
+
+</style>
+
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <h1>SatFusion</h1>
+  <p>
+    A unified satellite intelligence platform powered by
+    <strong>Sentinel-2</strong> and multi-source Earth observation data.
+  </p>
+  <div class="hero-buttons">
+    <a href="login.html" class="btn-primary">Login</a>
+    <a href="signup.html" class="btn-secondary">Get Started</a>
+  </div>
+</section>
+
+<!-- WHAT IS SENTINEL-2 -->
+<section class="section">
+  <h2>What is Sentinel-2?</h2>
+  <p>
+    <strong>Sentinel-2</strong> is an Earth-observation satellite mission under the
+    <strong>Copernicus Programme</strong>, operated by the
+    <strong>European Space Agency (ESA)</strong>.
+  </p>
+  <p>
+    It captures high-resolution, multispectral images of the Earth’s land surface
+    to monitor agriculture, forests, water bodies, urban growth, and environmental changes.
+  </p>
+</section>
+
+<!-- KEY FEATURES -->
+<section class="section dark">
+  <h2>Why Sentinel-2 Data Matters</h2>
+  <div class="cards">
+    <div class="info-card">🌱 Agriculture & Crop Monitoring</div>
+    <div class="info-card">🌍 Land-Cover Classification</div>
+    <div class="info-card">🌊 Flood & Water Mapping</div>
+    <div class="info-card">🧊 Snow & Ice Detection</div>
+    <div class="info-card">🏙️ Urban Expansion Analysis</div>
+    <div class="info-card">🔥 Disaster Impact Assessment</div>
+  </div>
+</section>
+
+<!-- PRODUCT LEVELS -->
+<section class="section">
+  <h2>Sentinel-2 Processing Levels</h2>
+  <div class="cards">
+    <div class="level-card"><b>Level-0</b><br>Raw satellite telemetry data</div>
+    <div class="level-card"><b>Level-1A</b><br>Radiometric correction applied</div>
+    <div class="level-card"><b>Level-1B</b><br>Geometric & radiometric correction</div>
+    <div class="level-card"><b>Level-1C</b><br>Orthorectified TOA reflectance</div>
+    <div class="level-card"><b>Level-2A</b><br>Surface reflectance (BOA)</div>
+  </div>
+</section>
+
+<!-- TILE & SAFE -->
+<section class="section dark">
+  <h2>How Sentinel-2 Data Is Organized</h2>
+  <ul class="points">
+    <li>🧩 Data is divided into <strong>UTM tiles</strong>, not full scenes</li>
+    <li>📦 Products follow the <strong>SAFE format</strong></li>
+    <li>📁 Includes GRANULE, DATASTRIP, AUX_DATA, QI_DATA folders</li>
+    <li>📄 Metadata is stored in XML & <code>manifest.safe</code></li>
+  </ul>
+</section>
+
+<!-- QUALITY & MASKS -->
+<section class="section">
+  <h2>Quality Indicators & Masks</h2>
+  <div class="cards">
+    <div class="info-card">☁️ Cloud Coverage %</div>
+    <div class="info-card">❄️ Snow / Ice Percentage</div>
+    <div class="info-card">📐 Geometric Accuracy</div>
+    <div class="info-card">🎯 Radiometric Quality</div>
+    <div class="info-card">🧠 Cloud / Snow / Quality Masks</div>
+  </div>
+</section>
+
+<!-- ATMOSPHERIC DATA -->
+<section class="section dark">
+  <h2>Atmospheric & Auxiliary Data</h2>
+  <p>
+    SatFusion integrates atmospheric correction and auxiliary datasets compatible with:
+  </p>
+  <ul class="points">
+    <li>🌤️ ECMWF weather models</li>
+    <li>🌫️ CAMS atmospheric composition data</li>
+    <li>🧪 Sen2Cor-based Level-2A processing</li>
+  </ul>
+</section>
+
+<!-- SATFUSION PIPELINE -->
+<section class="section">
+  <h2>SatFusion Analytics Pipeline</h2>
+  <div class="cards">
+    <div class="pipeline">📥 Ingest (Sentinel-2, Landsat, ISRO)</div>
+    <div class="pipeline">🧹 Preprocess (Cloud mask, correction)</div>
+    <div class="pipeline">🔀 Data Fusion (Pixel / Feature / Decision)</div>
+    <div class="pipeline">📊 Analytics & Insights</div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <h2>Turn Satellite Data into Actionable Intelligence</h2>
+  <a href="signup.html" class="btn-primary">Start Using SatFusion</a>
+</section>
+
+</body>
+</html>

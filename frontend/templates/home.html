@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Orbit Intelligence | Satellite Mission Control</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body { background-color: #05070a; color: white; font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; }
+        #cesiumContainer { width: 100%; height: 100vh; }
+        .glass { background: rgba(13, 17, 23, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(0, 255, 255, 0.1); }
+        /* The Slider Handle Style */
+        #slider { position: absolute; left: 50%; top: 0; width: 4px; height: 100%; background: #00d1ff; cursor: ew-resize; z-index: 20; box-shadow: 0 0 15px #00d1ff; }
+        #slider::after { content: '↔'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; background: #00d1ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; }
+    </style>
+</head>
+<body class="flex">
+
+    <aside class="w-16 h-screen flex flex-col items-center py-6 border-r border-white/5 glass z-30">
+        <div class="mb-10 text-orange-500 font-bold text-xl">O/I</div>
+        <div class="flex flex-col gap-8 opacity-50">
+            <button class="hover:text-cyan-400 transition">🏠</button>
+            <button class="text-cyan-400">🌍</button>
+            <button class="hover:text-cyan-400">📊</button>
+            <button class="hover:text-cyan-400">📄</button>
+            <button class="hover:text-cyan-400">⚙️</button>
+        </div>
+    </aside>
+
+    <main class="flex-1 relative flex flex-col">
+        
+        <header class="h-16 glass flex items-center justify-between px-8 z-30 border-b border-white/5">
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-mono text-cyan-500 tracking-widest uppercase">Mission: 01-ALFA</span>
+                <h1 class="text-sm font-bold tracking-tight">MULTI-MISSION ANALYTICS DASHBOARD</h1>
+            </div>
+            <button class="bg-cyan-500 hover:bg-cyan-600 text-black px-4 py-1.5 rounded-md text-xs font-bold transition">EXPORT PDF</button>
+        </header>
+
+        <div class="flex-1 relative">
+            <div id="cesiumContainer"></div>
+            
+            <div id="slider"></div>
+
+            <div class="absolute top-6 left-6 w-72 glass p-5 rounded-xl z-20">
+                <input type="text" placeholder="Search coordinates..." class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs mb-4 outline-none focus:border-cyan-500">
+                <h3 class="text-[10px] font-bold text-gray-500 uppercase mb-3 tracking-widest">Active Satellites</h3>
+                <div class="space-y-2 text-sm">
+                    <label class="flex items-center gap-3"><input type="checkbox" checked class="accent-cyan-500"> NASA Landsat 9</label>
+                    <label class="flex items-center gap-3"><input type="checkbox" checked class="accent-orange-500"> ISRO Resourcesat-2</label>
+                </div>
+                <hr class="my-4 border-white/5">
+                <h3 class="text-[10px] font-bold text-gray-500 uppercase mb-3 tracking-widest">Layers</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between items-center"><span>Natural Color</span> <div class="w-8 h-4 bg-cyan-500 rounded-full"></div></div>
+                    <div class="flex justify-between items-center opacity-40"><span>NDVI (Vegetation)</span> <div class="w-8 h-4 bg-gray-700 rounded-full"></div></div>
+                </div>
+            </div>
+
+            <div class="absolute bottom-6 right-6 w-64 glass p-4 rounded-xl z-20 font-mono text-[10px]">
+                <div class="flex justify-between mb-2 border-b border-white/10 pb-1">
+                    <span>METRIC</span><span>NASA</span><span>ISRO</span>
+                </div>
+                <div class="flex justify-between text-cyan-400"><span>RES</span><span>30m</span><span>5.8m</span></div>
+                <div class="flex justify-between mt-1"><span>CLOUDS</span><span>12%</span><span>15%</span></div>
+                <div class="mt-4 h-1 w-full bg-white/5 overflow-hidden">
+                    <div class="h-full bg-cyan-500 w-3/4 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="h-16 glass z-30 flex items-center px-10 gap-6 border-t border-white/5">
+            <span class="text-orange-500 text-sm">▶</span>
+            <div class="flex-1 h-[2px] bg-white/10 relative">
+                <div class="absolute left-1/2 -top-1 w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_10px_#00d1ff]"></div>
+            </div>
+            <span class="font-mono text-[10px] text-gray-400 uppercase tracking-widest">2026-01-15 19:55 UTC</span>
+        </footer>
+    </main>
+
+    <script>
+        const satelliteData = {
+    "NASA Landsat 9": {
+        resolution: "30 meters",
+        revisit: "16 days",
+        bands: 11,
+        launch: 2021,
+        mission: "Operational Land Imager-2",
+        accuracy: "92%"
+    },
+    "ISRO Resourcesat-2": {
+        resolution: "5.8 meters (LISS-4)",
+        revisit: "5 days",
+        bands: 3,
+        launch: 2011,
+        mission: "Linear Imaging Self-Scanning",
+        accuracy: "89%"
+    },
+    "Sentinel-2 (ESA)": {
+        resolution: "10 meters",
+        revisit: "5 days",
+        bands: 13,
+        launch: 2015,
+        mission: "Multi-Spectral Instrument",
+        accuracy: "95%"
+    }
+};
+
+function updateDashboard(satName) {
+    const data = satelliteData[satName];
+    if(!data) return;
+
+    // This updates your Right Analytics box
+    const overlay = document.querySelector('.absolute.bottom-6.right-6');
+    overlay.innerHTML = `
+        <div class="flex justify-between mb-2 border-b border-white/10 pb-1">
+            <span class="text-cyan-400 font-bold">${satName}</span>
+        </div>
+        <div class="space-y-2 text-[10px]">
+            <div class="flex justify-between"><span>SPATIAL RES:</span> <span class="text-white">${data.resolution}</span></div>
+            <div class="flex justify-between"><span>REVISIT TIME:</span> <span class="text-white">${data.revisit}</span></div>
+            <div class="flex justify-between"><span>SPECTRAL BANDS:</span> <span class="text-white">${data.bands}</span></div>
+            <div class="flex justify-between"><span>ACCURACY:</span> <span class="text-green-400">${data.accuracy}</span></div>
+        </div>
+        <div class="mt-4 h-1 w-full bg-white/5 overflow-hidden">
+            <div class="h-full bg-cyan-500" style="width: ${data.accuracy}"></div>
+        </div>
+    `;
+}
+
+// Attach this to your checkboxes
+document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+        if(e.target.checked) {
+            const label = e.target.parentElement.innerText.trim();
+            updateDashboard(label);
+        }
+    });
+});
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyMjVlMGNjZC1jNjE3LTQ2YTAtYmZjOC02NWY5MmJkODNkZjMiLCJpZCI6Mzc5MTI4LCJpYXQiOjE3Njg0ODUyMzh9.AAa1UiByA-EBfTIdBoUCvu8LTqcaEgY3FeeIffHR44E';
+        
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false,
+            geocoder: false,
+            animation: false,
+            timeline: false
+        });
+
+        // Split Logic
+        const slider = document.getElementById('slider');
+        const layers = viewer.imageryLayers;
+
+        // Example NASA Layer (Right Side)
+        const nasaLayer = layers.addImageryProvider(new Cesium.ArcGisMapServerImageryProvider({
+            url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+        }));
+
+        // Example ISRO Style Layer (Left Side) - using Night Lights for visual contrast
+        const isroLayer = layers.addImageryProvider(new Cesium.IonImageryProvider({ assetId: 3812 }));
+        isroLayer.splitDirection = Cesium.SplitDirection.LEFT;
+
+        // Mouse Drag Interaction for Slider
+        let handler = new Cesium.ScreenSpaceEventHandler(slider);
+        let dragActive = false;
+
+        slider.addEventListener('mousedown', () => { dragActive = true; });
+        window.addEventListener('mouseup', () => { dragActive = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!dragActive) return;
+            let splitPosition = e.clientX / window.innerWidth;
+            slider.style.left = (splitPosition * 100) + '%';
+            viewer.scene.splitPosition = splitPosition;
+        });
+
+        // Initialize Camera in India (Bangalore/ISRO HQ area)
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(77.5946, 12.9716, 5000.0)
+        });
+
+        async function exportReport() {
+    const { jsPDF } = window.jspdf;
+    const reportArea = document.querySelector('main'); // Targets your dashboard
+    const exportBtn = document.querySelector('button.bg-cyan-500');
+
+    // 1. Visual Feedback
+    exportBtn.innerText = "GENERATING...";
+    exportBtn.style.opacity = "0.5";
+
+    try {
+        // 2. Capture the HTML as an Image
+        const canvas = await html2canvas(reportArea, {
+            useCORS: true, // Crucial for loading satellite tiles
+            backgroundColor: "#05070a",
+            scale: 2 // High resolution
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        
+        // 3. Create PDF
+        const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape A4
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        
+        // 4. Download
+        pdf.save(`Satellite_Comparison_Report_${new Date().getTime()}.pdf`);
+        
+    } catch (error) {
+        console.error("PDF Export Failed:", error);
+        alert("Could not export PDF. Check console for CORS errors.");
+    } finally {
+        exportBtn.innerText = "EXPORT PDF";
+        exportBtn.style.opacity = "1";
+    }
+}
+
+// 5. Link the button to the function
+document.querySelector('button.bg-cyan-500').addEventListener('click', exportReport);
+    </script>
+</body>
+</html>
